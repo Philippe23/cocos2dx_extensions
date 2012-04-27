@@ -35,6 +35,7 @@
 USING_NS_CC;
 
 #define kDialogTag 0xdaa999
+#define kCoverLayerTag 0xceaea999
 #define kAnimationTime 0.4f
 #define kDialogImg "dialogBox.png"
 #define kButtonImg "dialogButton.png"
@@ -98,39 +99,48 @@ public:
 };
 
 // Replaces the use of blocks, since C++ doesn't have those.
-class PSCloseAndCallBlock: public CCObject
+//
+// These would be subclassed from CCObject, but we don't get
+// the handy auto-reference counting that blocks get.  So my
+// hack is to add them as invisible items on the cover layer.
+//
+// They can't have circular references back to the layer to run
+// the code that was in the blocks, so layers and dialogs are
+// found and verified by tags (defines near top).
+//
+// Like CCMenuItem's, they don't retain the selectors they're
+// going to call.
+class PSCloseAndCallBlock: public CCNode
 {
 public:
 	PSCloseAndCallBlock():
-		dialog(NULL),
-		coverLayer(NULL),
 		selectorTarget(NULL),
 		selector(NULL)
 	{ }
 
 	virtual ~PSCloseAndCallBlock()
 	{
-		CC_SAFE_RELEASE_NULL(dialog);
-		CC_SAFE_RELEASE_NULL(coverLayer);
-		CC_SAFE_RELEASE_NULL(selectorTarget);
+		this->selectorTarget = NULL;
 		this->selector = NULL;
 	}
 
 	virtual bool initWithOptions(
-		CCNode *dialog,
 		CCLayer *coverLayer,
 		CCObject *selectorTarget,
 		SEL_CallFunc selector)
 	{
-		// if ( !this->CCObject::init() )
+		// if ( !this->CCNode::init() )
 		//	return false;
 
-		CC_ASSERT(dialog);
 		CC_ASSERT(coverLayer);
 		CC_ASSERT( (selectorTarget && selector) || (!selectorTarget && !selector) );
 
-		this->setDialog(dialog);
-		this->setCoverLayer(coverLayer);
+		// Note that we automatically glom onto the coverlayer,
+		// this is likely all that keeps us around.  We'll
+		// go away when it goes away.
+		CC_ASSERT(coverLayer->getTag() == kCoverLayerTag);
+		coverLayer->addChild(this);
+
 		this->setSelectorTarget(selectorTarget);
 		this->setSelector(selector);
 
@@ -138,7 +148,6 @@ public:
 	}
 
 	static PSCloseAndCallBlock* closeAndCallBlockWithOptions(
-		CCNode *dialog,
 		CCLayer *coverLayer,
 		CCObject *selectorTarget,
 		SEL_CallFunc selector)
@@ -147,7 +156,6 @@ public:
 		if (!cncb)
 			return NULL;
 		bool success = cncb->initWithOptions(
-			dialog,
 			coverLayer,
 			selectorTarget,
 			selector);
@@ -165,32 +173,40 @@ public:
 	{
 		CC_UNUSED_PARAM(menu_item);
 
+		// Parent == CoverLayer & find sibling dialog by tag.
+		CCNode *parent = this->getParent();
+		CC_ASSERT(parent);
+		CC_ASSERT(dynamic_cast<CCLayer*>(parent) != NULL);
+		CC_ASSERT(parent->getTag() == kCoverLayerTag);
+
+		CCLayer *coverLayer = static_cast<CCLayer*>(parent);
+		CC_ASSERT(coverLayer);
+		CCNode *dialog = coverLayer->getChildByTag(kDialogTag);
+		CC_ASSERT(dialog);
+
 		PSModalAlertCloseAlert(
-			this->getDialog(),
-			this->getCoverLayer(),
+			dialog,
+			coverLayer,
 			this->getSelectorTarget(),
 			this->getSelector() );
 	}
 
-	CC_SYNTHESIZE_RETAIN(CCNode*, dialog, Dialog);
-	CC_SYNTHESIZE_RETAIN(CCLayer*, coverLayer, CoverLayer);
-	CC_SYNTHESIZE_RETAIN(CCObject*, selectorTarget, SelectorTarget);
+	CC_SYNTHESIZE(CCObject*, selectorTarget, SelectorTarget);
 	CC_SYNTHESIZE(SEL_CallFunc, selector, Selector);
 };
 
-class PSWhenDoneBlock: public CCObject
+// Make sure you read the comment above PSCloseAndCallBlock
+class PSWhenDoneBlock: public CCNode
 {
 public:
 	PSWhenDoneBlock():
-		coverLayer(NULL),
 		selectorTarget(NULL),
 		selector(NULL)
 	{ }
 
 	virtual ~PSWhenDoneBlock()
 	{
-		CC_SAFE_RELEASE_NULL(coverLayer);
-		CC_SAFE_RELEASE_NULL(selectorTarget);
+		this->selectorTarget = NULL;
 		this->selector = NULL;
 	}
 
@@ -199,14 +215,18 @@ public:
 		CCObject *selectorTarget,
 		SEL_CallFunc selector)
 	{
-		// if ( !this->CCObject::init() )
+		// if ( !this->CCNode::init() )
 		//	return false;
 
 		CC_ASSERT(coverLayer);
-		CC_ASSERT(selectorTarget);
-		CC_ASSERT(selector);
+		CC_ASSERT( (selectorTarget && selector) || (!selectorTarget && !selector) );
 
-		this->setCoverLayer(coverLayer);
+		// Note that we automatically glom onto the coverlayer,
+		// this is likely all that keeps us around.  We'll
+		// go away when it goes away.
+		CC_ASSERT(coverLayer->getTag() == kCoverLayerTag);
+		coverLayer->addChild(this);
+
 		this->setSelectorTarget(selectorTarget);
 		this->setSelector(selector);
 
@@ -237,10 +257,24 @@ public:
 
 	void Execute()
 	{
+		// Code we're replacing:
 		//[CCCallBlock actionWithBlock:^{
 		//     [coverLayer removeFromParentAndCleanup:YES];
 		//     if (block) block();
-		this->getCoverLayer()->removeFromParentAndCleanup(true);
+
+		// More work than above, coverlayer should be our
+		// parent.
+		CCNode *parent = this->getParent();
+		CC_ASSERT(parent);
+		CC_ASSERT(parent->getTag() == kCoverLayerTag);
+		CC_ASSERT(dynamic_cast<CCLayer*>(parent) != NULL);
+		CCLayer *coverLayer = static_cast<CCLayer*>(parent);
+		CC_ASSERT(coverLayer);
+
+		// Retain coverlayer so it doesn't go away on us.
+		coverLayer->retain();
+
+		coverLayer->removeFromParentAndCleanup(true);
 
 		SEL_CallFunc sel = this->getSelector();
 		if (sel)
@@ -253,13 +287,16 @@ public:
 		{
 			CC_ASSERT( !this->getSelectorTarget() );
 		}
+
+		// Release -- there's a good chance we might be
+		// deleted by this next line since being a child
+		// of coverLayer is all that keeps us around,
+		// so make sure "this" isn't used after it.
+		coverLayer->release();
 	}
 
-	CC_SYNTHESIZE_RETAIN(CCNode*, dialog, Dialog);
-	CC_SYNTHESIZE_RETAIN(CCLayer*, coverLayer, CoverLayer);
-	CC_SYNTHESIZE_RETAIN(CCObject*, selectorTarget, SelectorTarget);
+	CC_SYNTHESIZE(CCObject*, selectorTarget, SelectorTarget);
 	CC_SYNTHESIZE(SEL_CallFunc, selector, Selector);
-
 };
 
 
@@ -314,6 +351,9 @@ void PSModalAlertShowAlert(
 	CCLayerColor *coverLayer = PSCoverLayer::node();
 	CC_ASSERT(coverLayer);
 
+	// Tag for later validation.
+	coverLayer->setTag(kCoverLayerTag);
+
 	// put to the very top to block application touches.
 	layer->addChild(coverLayer, INT_MAX);
 
@@ -363,7 +403,6 @@ void PSModalAlertShowAlert(
 	// The following is to replace the Objective-C block
 	// in the original.
 	PSCloseAndCallBlock *cncb = PSCloseAndCallBlock::closeAndCallBlockWithOptions(
-		dialog,
 		coverLayer,
 		opt1SelectorTarget,
 		opt1Selector);
@@ -398,7 +437,6 @@ void PSModalAlertShowAlert(
 	{
 		// Replaces Objective-C block in original code.
 		cncb = PSCloseAndCallBlock::closeAndCallBlockWithOptions(
-			dialog,
 			coverLayer,
 			opt2SelectorTarget,
 			opt2Selector);
