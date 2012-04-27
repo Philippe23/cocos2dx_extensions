@@ -1,7 +1,7 @@
 /*
  * ModalAlert - Customizable popup dialogs/alerts for Cocos2D
  * For details, visit the Rombos blog:
- * http://rombosblog.wordpress.com/2012/02/28/modal-alerts-for-cocos2d/ 
+ * http://rombosblog.wordpress.com/2012/02/28/modal-alerts-for-cocos2d/
  *
  * Copyright (c) 2012 Hans-Juergen Richstein, Rombos
  * http://www.rombos.de
@@ -32,23 +32,33 @@
 #include "cocos2d.h"
 #include "PSModalAlert.h"
 
-USING_NS_COCOS;
+USING_NS_CC;
 
-#define kDialogTag 1234
+#define kDialogTag 0xdaa999
 #define kAnimationTime 0.4f
-#define kDialogImg @"dialogBox.png"
-#define kButtonImg @"dialogButton.png"
-#define kFontName @"MarkerFelt-Thin"
+#define kDialogImg "dialogBox.png"
+#define kButtonImg "dialogButton.png"
+#define kFontName "MarkerFelt-Thin"
 
 // Local function declarations
 static void PSModalAlertCloseAlert(
-	CCSprite *alertDialog,
+	CCNode *alertDialog,
 	CCLayer *coverLayer,
 	CCObject *doneSelectorTarget,
-	SEL_func doneSelector);
+	SEL_CallFunc doneSelector);
+
+static void PSModalAlertShowAlert(
+	char const *message,
+	CCLayer *layer,
+	char const *opt1,
+	CCObject *opt1SelectorTarget,
+	SEL_CallFunc opt1Selector,
+	char const *opt2,
+	CCObject *opt2SelectorTarget,
+	SEL_CallFunc opt2Selector);
 
 
-// class that implements a black colored layer that will cover the whole screen 
+// class that implements a black colored layer that will cover the whole screen
 // and eats all touches except within the dialog box child
 class PSCoverLayer: public CCLayerColor
 {
@@ -58,10 +68,10 @@ public:
 
 	virtual bool init()
 	{
-		if ( !self->CCLayerColor::initWithColor(ccc4(0,0,0,0)) )
+		if ( !this->CCLayerColor::initWithColor(ccc4f(0,0,0,0)) )
 			return false;
 
-		self->setIsTouchEnabled(true);
+		this->setIsTouchEnabled(true);
 
 		return true;
 	}
@@ -72,7 +82,7 @@ public:
 		CCPoint touchLocation = this->convertTouchToNodeSpace(touch);
 		CCNode *dialogBox = this->getChildByTag(kDialogTag);
 		CC_ASSERT(dialogBox);
-		CCRect bbox = dialogBox->getBoundingBox();
+		CCRect const bbox = dialogBox->boundingBox();
 
 		// eat all touches outside of dialog box.
 		return !CCRect::CCRectContainsPoint(bbox, touchLocation);
@@ -80,7 +90,7 @@ public:
 
 	virtual void registerWithTouchDispatcher()
 	{
-		CCTouchDispater::sharedDispatcher()->addTargetedDelegate(
+		CCTouchDispatcher::sharedDispatcher()->addTargetedDelegate(
 			this,
 			INT_MIN+1,
 			true); // swallows touches.
@@ -110,11 +120,11 @@ public:
 		CCNode *dialog,
 		CCLayer *coverLayer,
 		CCObject *selectorTarget,
-		SEL_Func selector)
+		SEL_CallFunc selector)
 	{
 		// if ( !this->CCObject::init() )
 		//	return false;
-	
+
 		CC_ASSERT(dialog);
 		CC_ASSERT(coverLayer);
 		CC_ASSERT(selectorTarget);
@@ -132,7 +142,7 @@ public:
 		CCNode *dialog,
 		CCLayer *coverLayer,
 		CCObject *selectorTarget,
-		SEL_func selector)
+		SEL_CallFunc selector)
 	{
 		PSCloseAndCallBlock *cncb = new PSCloseAndCallBlock();
 		if (!cncb)
@@ -152,8 +162,10 @@ public:
 		return cncb;
 	}
 
-	void Execute()
+	void Execute(CCNode *menu_item)
 	{
+		CC_UNUSED_PARAM(menu_item);
+
 		PSModalAlertCloseAlert(
 			this->getDialog(),
 			this->getCoverLayer(),
@@ -164,7 +176,7 @@ public:
 	CC_SYNTHESIZE_RETAIN(CCNode*, dialog, Dialog);
 	CC_SYNTHESIZE_RETAIN(CCLayer*, coverLayer, CoverLayer);
 	CC_SYNTHESIZE_RETAIN(CCObject*, selectorTarget, SelectorTarget);
-	CC_SYNTHESIZE(SEL_Func, selector, Selector);
+	CC_SYNTHESIZE(SEL_CallFunc, selector, Selector);
 };
 
 class PSWhenDoneBlock: public CCObject
@@ -186,11 +198,11 @@ public:
 	virtual bool initWithOptions(
 		CCLayer *coverLayer,
 		CCObject *selectorTarget,
-		SEL_Func selector)
+		SEL_CallFunc selector)
 	{
 		// if ( !this->CCObject::init() )
 		//	return false;
-	
+
 		CC_ASSERT(coverLayer);
 		CC_ASSERT(selectorTarget);
 		CC_ASSERT(selector);
@@ -205,7 +217,7 @@ public:
 	static PSWhenDoneBlock* whenDone(
 		CCLayer *coverLayer,
 		CCObject *selectorTarget,
-		SEL_func selector)
+		SEL_CallFunc selector)
 	{
 		PSWhenDoneBlock *wdb = new PSWhenDoneBlock();
 		if (!wdb)
@@ -229,14 +241,14 @@ public:
 		//[CCCallBlock actionWithBlock:^{
 		//     [coverLayer removeFromParentAndCleanup:YES];
 		//     if (block) block();
-		this->getCoverLayer()->removeFromParent(true);
-		
-		SEL_Func sel = this->getSelector();
+		this->getCoverLayer()->removeFromParentAndCleanup(true);
+
+		SEL_CallFunc sel = this->getSelector();
 		if (sel)
 		{
 			CCObject *target = this->getSelectorTarget();
 			CC_ASSERT(target);
-			target->*selector();
+			(target->*selector)();
 		}
 		else
 		{
@@ -247,18 +259,18 @@ public:
 	CC_SYNTHESIZE_RETAIN(CCNode*, dialog, Dialog);
 	CC_SYNTHESIZE_RETAIN(CCLayer*, coverLayer, CoverLayer);
 	CC_SYNTHESIZE_RETAIN(CCObject*, selectorTarget, SelectorTarget);
-	CC_SYNTHESIZE(SEL_Func, selector, Selector);
-	
+	CC_SYNTHESIZE(SEL_CallFunc, selector, Selector);
+
 };
 
 
 
 
 void PSModalAlertCloseAlert(
-	CCSprite *alertDialog,
+	CCNode *alertDialog,
 	CCLayer *coverLayer,
 	CCObject *doneSelectorTarget,
-	SEL_func doneSelector)
+	SEL_CallFunc doneSelector)
 {
 	CC_ASSERT(alertDialog);
 	CC_ASSERT(coverLayer);
@@ -274,27 +286,27 @@ void PSModalAlertCloseAlert(
 		coverLayer,
 		doneSelectorTarget,
 		doneSelector);
-	CC_ASSSERT(wdb);
+	CC_ASSERT(wdb);
 	coverLayer->runAction(
 		CCSequence::actions(
 			CCFadeTo::actionWithDuration(kAnimationTime, 0.0f),
-			CCCallFunc::action(
+			CCCallFunc::actionWithTarget(
 				wdb,
-				PSWhenDoneBlock::Execute)
+				SEL_CallFunc(&PSWhenDoneBlock::Execute) )
 		) );
 }
 
 
 
-void PSModalAlert::ShowAlert(
+void PSModalAlertShowAlert(
 	char const *message,
 	CCLayer *layer,
 	char const *opt1,
 	CCObject *opt1SelectorTarget,
-	SEL_Func opt1Selector,
+	SEL_CallFunc opt1Selector,
 	char const *opt2,
 	CCObject *opt2SelectorTarget,
-	SEL_Func opt2Selector)
+	SEL_CallFunc opt2Selector)
 {
 	CC_ASSERT(message);
 	CC_ASSERT(layer);
@@ -318,15 +330,20 @@ void PSModalAlert::ShowAlert(
 	CCPoint pos(sz.width, sz.height);
 
 	dialog->setTag(kDialogTag);
-	dialog->setPosition( ccpMul(pos, 0.5f) );
+	dialog->setPosition( ccpMult(pos, 0.5f) );
 	dialog->setOpacity(220); // Make it a bit transparent for a cooler look.
+
 
 	// Add the alert text.
 	CCSize const & dialogSize = dialog->getContentSize();
 	CCSize const msgSize(
 		dialogSize.width * 0.9f,
 		dialogSize.height * 0.55f);
-	float const fontSize = UI_USER_INTERFACE_IDIOM() == IPAD ? 42 : 30;
+	// Trying to replace UI_USER_INTERFACE_IDIOM() == IPAD
+	CCSize const winSize = CCDirector::sharedDirector()->getWinSize();
+	bool const isiPad = (winSize.width >= 1024.0f) ||
+	                    (winSize.height >= 1024.0f);
+	float const fontSize =  ( isiPad ? 42 : 30 );
 
 	CCLabelTTF *dialogMsg = CCLabelTTF::labelWithString(
 		message,
@@ -337,15 +354,27 @@ void PSModalAlert::ShowAlert(
 	CC_ASSERT(dialogMsg);
 	// dialogMsg->setAnchorPoint(CCPointZero);
 	pos = ccp(dialogSize.width, dialogSize.height);
-	pos = ccpMul(pos, 0.5f);
+	pos = ccpMult(pos, 0.5f);
 	dialogMsg->setPosition(pos);
 	dialogMsg->setColor(ccBLACK);
 	dialog->addChild(dialogMsg);
 
 	// add one or two buttons, as needed
+
+	// The following is to replace the Objective-C block
+	// in the original.
+	PSCloseAndCallBlock *cncb = PSCloseAndCallBlock::closeAndCallBlockWithOptions(
+		dialog,
+		coverLayer,
+		opt1SelectorTarget,
+		opt1Selector);
+	CC_ASSERT(cncb);
+
 	CCMenuItemSprite *opt1Button = CCMenuItemSprite::itemFromNormalSprite(
 		CCSprite::spriteWithFile(kButtonImg),
 		CCSprite::spriteWithFile(kButtonImg),
+		cncb,
+		SEL_MenuHandler(&PSCloseAndCallBlock::Execute) );
 	CC_ASSERT(opt1Button);
 	pos.x = dialog->getTextureRect().size.width;
 	if (opt2)
@@ -356,7 +385,7 @@ void PSModalAlert::ShowAlert(
 
 	CCLabelTTF *opt1Label = CCLabelTTF::labelWithString(
 		opt1,
-		op1Button->getContentSize(),
+		opt1Button->getContentSize(),
 		CCTextAlignmentCenter,
 		kFontName,
 		fontSize);
@@ -368,9 +397,19 @@ void PSModalAlert::ShowAlert(
 	CCMenuItemSprite *opt2Button = NULL;
 	if (opt2)
 	{
+		// Replaces Objective-C block in original code.
+		cncb = PSCloseAndCallBlock::closeAndCallBlockWithOptions(
+			dialog,
+			coverLayer,
+			opt2SelectorTarget,
+			opt2Selector);
+		CC_ASSERT(cncb);
+
 		opt2Button = CCMenuItemSprite::itemFromNormalSprite(
 			CCSprite::spriteWithFile(kButtonImg),
 			CCSprite::spriteWithFile(kButtonImg),
+			cncb,
+			SEL_MenuHandler(&PSCloseAndCallBlock::Execute) );
 		CC_ASSERT(opt2Button);
 		pos.x = dialog->getTextureRect().size.width * 0.73f;
 		pos.y = opt1Button->getContentSize().height * 0.8f;
@@ -414,11 +453,11 @@ void PSModalAlert::AskQuestionOnLayer(
 	char const * question,
 	CCLayer *layer,
 	CCObject *yesSelectorTarget,
-	SEL_func yesSelector,
+	SEL_CallFunc yesSelector,
 	CCObject *noSelectorTarget,
-	SEL_Func noSelector)
+	SEL_CallFunc noSelector)
 {
-	PSModalAlert::ShowAlert(
+	PSModalAlertShowAlert(
 		question,
 		layer,
 		"Yes", yesSelectorTarget, yesSelector,
@@ -426,14 +465,14 @@ void PSModalAlert::AskQuestionOnLayer(
 }
 
 void PSModalAlert::ConfirmQuestionOnLayer(
-	char const * question
+	char const * question,
 	CCLayer *layer,
 	CCObject *okSelectorTarget,
-	SEL_Func okSelector,
+	SEL_CallFunc okSelector,
 	CCObject *cancelSelectorTarget,
-	SEL_Func cancelSelector)
+	SEL_CallFunc cancelSelector)
 {
-	PSModalAlert::ShowAlert(
+	PSModalAlertShowAlert(
 		question,
 		layer,
 		"Okay", okSelectorTarget, okSelector,
@@ -444,9 +483,9 @@ void PSModalAlert::TellStatementOnLayer(
 	char const * statement,
 	CCLayer *layer,
 	CCObject *selectorTarget,
-	SEL_Func selector)
+	SEL_CallFunc selector)
 {
-	PSModalAlert::ShowAlert(
+	PSModalAlertShowAlert(
 		statement,
 		layer,
 		"Okay", selectorTarget, selector,

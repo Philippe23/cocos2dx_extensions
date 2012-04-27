@@ -2,7 +2,7 @@
  * ModalAlert - Customizable popup dialogs/alerts for Cocos2D
  *
  * For details, visit the Rombos blog:
- * http://rombosblog.wordpress.com/2012/02/28/modal-alerts-for-cocos2d/ 
+ * http://rombosblog.wordpress.com/2012/02/28/modal-alerts-for-cocos2d/
  *
  * Copyright (c) 2012 Hans-Juergen Richstein, Rombos
  * http://www.rombos.de
@@ -40,21 +40,21 @@ public:
 		char const * question,
 		cocos2d::CCLayer *layer,
 		cocos2d::CCObject *yesSelectorTarget,
-		cosos2d::SEL_func yesSelector,
-		cosos2d::CCObject *noSelectorTarget,
-		cocos2d::SEL_func noSelector);
+		cocos2d::SEL_CallFunc yesSelector,
+		cocos2d::CCObject *noSelectorTarget,
+		cocos2d::SEL_CallFunc noSelector);
 
 	static void ConfirmQuestionOnLayer(
 		char const * question,
 		cocos2d::CCLayer *layer,
 		cocos2d::CCObject *okSelectorTarget,
-		cosos2d::SEL_func okSelector,
-		cosos2d::CCObject *cancelSelectorTarget,
-		cocos2d::SEL_func cancelSelector);
+		cocos2d::SEL_CallFunc okSelector,
+		cocos2d::CCObject *cancelSelectorTarget,
+		cocos2d::SEL_CallFunc cancelSelector);
 
 	static void TellStatementOnLayer(
 		char const *statement,
 		cocos2d::CCLayer *layer,
 		cocos2d::CCObject *okSelectorTarget,
-		cosos2d::SEL_func okSelector);
+		cocos2d::SEL_CallFunc okSelector);
 };
