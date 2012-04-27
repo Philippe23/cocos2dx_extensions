@@ -127,8 +127,7 @@ public:
 
 		CC_ASSERT(dialog);
 		CC_ASSERT(coverLayer);
-		CC_ASSERT(selectorTarget);
-		CC_ASSERT(selector);
+		CC_ASSERT( (selectorTarget && selector) || (!selectorTarget && !selector) );
 
 		this->setDialog(dialog);
 		this->setCoverLayer(coverLayer);
