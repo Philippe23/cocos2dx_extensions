@@ -33,6 +33,20 @@
 #include "cocos2d.h"
 
 
+// This is just a class because the Objective-C version was.  A
+// PSModalAlert will never be instanciated.
+//
+// The one other gotcha' is that your selector targets are *not*
+// retained, so make sure they stick around until the dialog is
+// released.  (Which may be during an autorelease after the dialog
+// disappears.)
+//
+// As the original Objective-C version does, this requires the
+// dialogBox{,-hd,-ipad}.png and dialogButton{,-hd,-ipad}.png resources
+// to be loadable by CCSprite::spriteWithFile().  You can replace
+// them with your own versions that match your color schemes.
+//
+
 class PSModalAlert
 {
 public:
